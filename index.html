@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DM Remission Dashboard · รพ.คลองหลวง</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --teal:      #0F7E62;
+    --teal-lt:   #E0F5EE;
+    --blue:      #1253A4;
+    --blue-lt:   #E4EEF9;
+    --amber:     #B86A00;
+    --amber-lt:  #FEF3DC;
+    --red:       #C0332F;
+    --red-lt:    #FCEAEA;
+    --gray:      #4A4A56;
+    --gray-lt:   #F3F3F5;
+    --border:    #E2E2E8;
+    --bg:        #F7F8FA;
+    --card:      #FFFFFF;
+    --text:      #1A1A2E;
+    --text2:     #6B6B7E;
+    --font:      'Sarabun', sans-serif;
+    --mono:      'IBM Plex Mono', monospace;
+    --radius:    12px;
+    --shadow:    0 2px 12px rgba(0,0,0,.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: linear-gradient(135deg, #0d5c4a 0%, #1253A4 100%);
+    color: #fff; padding: 0 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 16px rgba(0,0,0,.18);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; }
+  .topbar-logo {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: rgba(255,255,255,.2); display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .topbar-title { font-size: 16px; font-weight: 700; letter-spacing: .02em; }
+  .topbar-sub   { font-size: 11px; opacity: .75; margin-top: 1px; font-family: var(--mono); }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .badge {
+    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25);
+    border-radius: 20px; padding: 4px 12px; font-size: 11px; font-family: var(--mono);
+  }
+  .refresh-btn {
+    background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+    color: #fff; border-radius: 8px; padding: 6px 14px; font-size: 12px;
+    cursor: pointer; font-family: var(--font); transition: background .2s;
+  }
+  .refresh-btn:hover { background: rgba(255,255,255,.28); }
+
+  /* ── LOADER ── */
+  #loader {
+    position: fixed; inset: 0; background: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 999; gap: 16px; transition: opacity .4s;
+  }
+  .spinner {
+    width: 44px; height: 44px; border: 3px solid var(--border);
+    border-top-color: var(--teal); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loader p { font-size: 14px; color: var(--text2); }
+
+  /* ── MAIN ── */
+  .main { max-width: 1280px; margin: 0 auto; padding: 24px 24px 40px; }
+
+  /* ── SECTION HEADING ── */
+  .section-heading {
+    font-size: 11px; font-weight: 600; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--text2);
+    border-left: 3px solid var(--teal); padding-left: 10px;
+    margin: 28px 0 14px;
+  }
+
+  /* ── KPI GRID ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 4px; }
+  .kpi-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+    box-shadow: var(--shadow); position: relative; overflow: hidden;
+    transition: transform .18s, box-shadow .18s;
+  }
+  .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,.1); }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .kpi-teal::before  { background: var(--teal); }
+  .kpi-blue::before  { background: var(--blue); }
+  .kpi-amber::before { background: var(--amber); }
+  .kpi-red::before   { background: var(--red); }
+  .kpi-label { font-size: 11px; color: var(--text2); font-weight: 500; margin-bottom: 6px; }
+  .kpi-value { font-size: 30px; font-weight: 700; line-height: 1; font-family: var(--mono); }
+  .kpi-teal  .kpi-value { color: var(--teal); }
+  .kpi-blue  .kpi-value { color: var(--blue); }
+  .kpi-amber .kpi-value { color: var(--amber); }
+  .kpi-red   .kpi-value { color: var(--red); }
+  .kpi-footer { font-size: 11px; color: var(--text2); margin-top: 6px; }
+
+  /* ── GRID LAYOUTS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 16px; }
+  .span2 { grid-column: span 2; }
+
+  /* ── CHART CARD ── */
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow);
+  }
+  .chart-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .chart-sub   { font-size: 11px; color: var(--text2); margin-bottom: 14px; }
+  .chart-wrap  { position: relative; }
+
+  /* ── BAR ROWS ── */
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .bar-lbl  { font-size: 11px; color: var(--text2); width: 96px; text-align: right; flex-shrink: 0; }
+  .bar-track { flex: 1; background: var(--gray-lt); border-radius: 6px; height: 14px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 6px; transition: width .8s cubic-bezier(.4,0,.2,1); }
+  .bar-pct   { font-size: 11px; font-family: var(--mono); color: var(--text); width: 38px; text-align: right; flex-shrink: 0; font-weight: 600; }
+
+  /* ── TREND PILLS ── */
+  .metric-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+  .metric-item { background: var(--gray-lt); border-radius: 10px; padding: 14px; }
+  .metric-name { font-size: 11px; color: var(--text2); margin-bottom: 8px; font-weight: 600; letter-spacing: .04em; }
+  .metric-row  { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .metric-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .metric-val  { font-size: 12px; font-family: var(--mono); font-weight: 600; }
+  .metric-arrow { font-size: 16px; margin: 2px 0; text-align: center; }
+  .up   { color: var(--red); }
+  .down { color: var(--teal); }
+  .flat { color: var(--amber); }
+
+  /* ── TABLE ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { background: var(--gray-lt); padding: 10px 12px; text-align: left; font-size: 11px; color: var(--text2); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--gray-lt); }
+  .pill {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  }
+  .pill-green  { background: var(--teal-lt);  color: var(--teal); }
+  .pill-blue   { background: var(--blue-lt);  color: var(--blue); }
+  .pill-amber  { background: var(--amber-lt); color: var(--amber); }
+  .pill-red    { background: var(--red-lt);   color: var(--red); }
+  .pill-gray   { background: var(--gray-lt);  color: var(--gray); }
+
+  /* ── ALERT NOTE ── */
+  .alert-note {
+    background: var(--amber-lt); border: 1px solid #F5CC6A;
+    border-radius: var(--radius); padding: 12px 16px;
+    font-size: 12px; color: var(--amber); line-height: 1.65;
+    margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .alert-icon { font-size: 16px; flex-shrink: 0; }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center; padding: 20px; font-size: 11px; color: var(--text2);
+    border-top: 1px solid var(--border); margin-top: 12px;
+    font-family: var(--mono);
+  }
+
+  /* ── ERROR ── */
+  .error-box {
+    background: var(--red-lt); border: 1px solid #f5a5a3;
+    border-radius: var(--radius); padding: 20px 24px;
+    font-size: 13px; color: var(--red); line-height: 1.7;
+  }
+  .error-box code { font-family: var(--mono); font-size: 11px; }
+
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2,1fr); }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .metric-grid { grid-template-columns: repeat(2,1fr); }
+    .span2 { grid-column: span 1; }
+    .main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="spinner"></div>
+  <p>กำลังโหลดข้อมูล...</p>
+</div>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">🏥</div>
+    <div>
+      <div class="topbar-title">DM Remission Dashboard</div>
+      <div class="topbar-sub">โรงพยาบาลคลองหลวง · ปทุมธานี</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="badge" id="last-updated">กำลังโหลด...</span>
+    <button class="refresh-btn" onclick="loadData()">↺ รีเฟรช</button>
+  </div>
+</header>
+
+<main class="main">
+  <div id="error-area"></div>
+  <div id="dashboard" style="display:none">
+
+    <div class="section-heading">ภาพรวมโครงการ</div>
+
+    <!-- KPI ROW -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card kpi-blue">
+        <div class="kpi-label">ผู้เข้าร่วมโครงการทั้งหมด</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-footer">ราย</div>
+      </div>
+      <div class="kpi-card kpi-teal">
+        <div class="kpi-label">เข้าสู่ DM Remission</div>
+        <div class="kpi-value" id="kpi-remission">—</div>
+        <div class="kpi-footer" id="kpi-remission-pct">—</div>
+      </div>
+      <div class="kpi-card kpi-amber">
+        <div class="kpi-label">หยุดยาได้ (ณ V2)</div>
+        <div class="kpi-value" id="kpi-stopped">—</div>
+        <div class="kpi-footer" id="kpi-stopped-pct">—</div>
+      </div>
+      <div class="kpi-card kpi-red">
+        <div class="kpi-label">ยังรับยาต่อเนื่อง (V2)</div>
+        <div class="kpi-value" id="kpi-continue">—</div>
+        <div class="kpi-footer" id="kpi-continue-pct">—</div>
+      </div>
+    </div>
+
+    <div class="section-heading">ผลทางคลินิก</div>
+    <div class="grid-2">
+      <div class="chart-card">
+        <div class="chart-title">HbA1c เฉลี่ย — 3 Visit</div>
+        <div class="chart-sub">เปรียบเทียบ Baseline · ครั้งที่ 1 · ครั้งที่ 2</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="hba1cChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">FBS เฉลี่ย — 3 Visit</div>
+        <div class="chart-sub">ระดับน้ำตาลอดอาหาร (mg/dL)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="fbsChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:16px">
+      <div class="chart-title">สรุปค่าเฉลี่ยทางคลินิก</div>
+      <div class="chart-sub">เปรียบเทียบ Baseline (V0) → ประเมินครั้งที่ 2 (V2)</div>
+      <div class="metric-grid" id="metric-grid"></div>
+    </div>
+
+    <div class="section-heading">ผลลัพธ์โครงการ</div>
+    <div class="grid-3">
+      <div class="chart-card">
+        <div class="chart-title">ผล DM Remission</div>
+        <div class="chart-sub">จำแนกตามสถานะ</div>
+        <div class="chart-wrap" style="height:180px"><canvas id="remissionChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">สถานะยา V0 → V2</div>
+        <div class="chart-sub">การเปลี่ยนแปลงประเภทยา</div>
+        <div class="chart-wrap" style="height:180px"><canvas id="drugChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">การกระจายเพศและอายุ</div>
+        <div class="chart-sub">กลุ่มอายุของผู้ป่วยในโครงการ</div>
+        <div class="chart-wrap" style="height:180px"><canvas id="ageChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-heading">ความรอบรู้สุขภาพ</div>
+    <div class="grid-2">
+      <div class="chart-card">
+        <div class="chart-title">ระดับความรอบรู้ (V0 → V1 → V2)</div>
+        <div class="chart-sub">สัดส่วนผู้ป่วยในแต่ละระดับ</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="hlChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">อัตรา Remission ตาม HbA1c เริ่มต้น</div>
+        <div class="chart-sub">กลุ่มที่ควบคุมน้ำตาลได้ดีตั้งแต่ต้นมีโอกาสสูงกว่า</div>
+        <div id="hba1c-bars"></div>
+      </div>
+    </div>
+
+    <div class="section-heading">ข้อมูลสรุปรายบุคคล (10 รายล่าสุด)</div>
+    <div class="chart-card" style="margin-bottom:16px;overflow-x:auto">
+      <table class="data-table" id="summary-table">
+        <thead><tr>
+          <th>#</th><th>เพศ</th><th>อายุ</th>
+          <th>HbA1c V0</th><th>HbA1c V2</th>
+          <th>FBS V0</th><th>FBS V2</th>
+          <th>สถานะยา V2</th><th>ผล Remission</th>
+        </tr></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+
+    <div class="alert-note" id="alert-note" style="display:none">
+      <span class="alert-icon">⚠️</span>
+      <span id="alert-text"></span>
+    </div>
+
+  </div><!-- end #dashboard -->
+</main>
+
+<footer id="footer">
+  แดชบอร์ดนี้ดึงข้อมูลจาก Google Sheets แบบ real-time &nbsp;·&nbsp;
+  รพ.คลองหลวง · ปทุมธานี &nbsp;·&nbsp;
+  <span id="footer-time"></span>
+</footer>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────
+const SHEET_ID  = "1U9KUSFZniT6PcPhO4LBbTO_P8tY2XjvCdfdD29D3HpE";
+const SHEET_GID = "985697561";
+// ใช้ Google Visualization API (รองรับ CORS / ไม่ต้อง API Key)
+const GVIZ_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+
+let charts = {};
+
+// ── HELPERS ─────────────────────────────────────────────────────────────
+function sf(v, lo=0, hi=9999) {
+  const f = parseFloat(String(v).trim());
+  return (!isNaN(f) && f > lo && f < hi) ? f : null;
+}
+function avg(arr) { return arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10 : null; }
+function pct(n, d) { return d ? (n/d*100).toFixed(1)+'%' : '—'; }
+function parseCSV(text) {
+  const rows = []; let row = [], col = '', inQ = false;
+  for (let i=0; i<text.length; i++) {
+    const c = text[i];
+    if (c==='"') { if (inQ && text[i+1]==='"') { col+='"'; i++; } else { inQ=!inQ; } }
+    else if (c===',' && !inQ) { row.push(col.trim()); col=''; }
+    else if ((c==='\n' || c==='\r') && !inQ) {
+      if (col||row.length) { row.push(col.trim()); rows.push(row); }
+      col=''; row=[]; if (c==='\r' && text[i+1]==='\n') i++;
+    } else col += c;
+  }
+  if (col||row.length) { row.push(col.trim()); rows.push(row); }
+  const headers = rows[0];
+  return rows.slice(1).map(r => Object.fromEntries(headers.map((h,i)=>[h, r[i]||''])));
+}
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function makeChart(id, config) {
+  destroyChart(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, config);
+}
+
+// ── GVIZ FETCH (ไม่มีปัญหา CORS) ────────────────────────────────────────
+async function fetchGViz() {
+  const res = await fetch(GVIZ_URL);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  // GViz returns: /*O_o*/ google.visualization.Query.setResponse({...});
+  const json = JSON.parse(text.replace(/^[^{]+/, '').replace(/[^}]+$/, ''));
+  const cols = json.table.cols.map(c => c.label || c.id);
+  return json.table.rows.map(row => {
+    const obj = {};
+    row.c.forEach((cell, i) => {
+      obj[cols[i]] = cell ? (cell.v !== null && cell.v !== undefined ? String(cell.v) : '') : '';
+    });
+    return obj;
+  });
+}
+
+// ── MAIN LOAD ────────────────────────────────────────────────────────────
+async function loadData() {
+  document.getElementById('loader').style.opacity = '1';
+  document.getElementById('loader').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('error-area').innerHTML = '';
+
+  try {
+    const data = await fetchGViz();
+    renderDashboard(data);
+    document.getElementById('last-updated').textContent = 'อัปเดต ' + new Date().toLocaleTimeString('th-TH');
+    document.getElementById('footer-time').textContent = 'โหลดล่าสุด ' + new Date().toLocaleString('th-TH');
+    document.getElementById('dashboard').style.display = 'block';
+  } catch(e) {
+    document.getElementById('error-area').innerHTML = `
+      <div class="error-box" style="margin-bottom:16px">
+        <strong>⚠️ ไม่สามารถโหลดข้อมูลได้</strong><br><br>
+        ${e.message}<br><br>
+        <strong>วิธีแก้ไข:</strong><br>
+        1. เปิด Google Sheet → Share → เปลี่ยนเป็น "Anyone with the link can view"<br>
+        2. รีเฟรชหน้านี้<br><br>
+        <code>Sheet ID: ${SHEET_ID}</code><br><br>
+        <strong>สาเหตุที่พบบ่อย:</strong><br>
+        • Google Sheet ยังไม่ได้ตั้งค่า "Anyone with the link can view"<br>
+        • เปิดจากไฟล์ในเครื่อง (file://) — ให้อัปโหลดขึ้นเว็บเซิร์ฟเวอร์หรือ GitHub Pages แทน
+      </div>`;
+    document.getElementById('dashboard').style.display = 'block';
+  } finally {
+    document.getElementById('loader').style.display = 'none';
+  }
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────
+function renderDashboard(data) {
+  const total = data.length;
+
+  // ── Parse all values
+  const remissionCount  = data.filter(r=>r.dm_remission_result?.includes('เข้าสู่')).length;
+  const noRemission     = data.filter(r=>r.dm_remission_result?.includes('ไม่เข้า')).length;
+  const cantCalc        = data.filter(r=>r.dm_remission_result?.includes('ไม่สามารถ')).length;
+
+  const drugStop_v2  = data.filter(r=>r.v2_drug_type==='หยุดยา').length;
+  const drugCont_v2  = data.filter(r=>r.v2_drug_type==='รับยา').length;
+  const drugRed_v2   = data.filter(r=>['ลดยา','ลดโดสยา'].includes(r.v2_drug_type)).length;
+  const drugAdd_v2   = data.filter(r=>['เพิ่ม/ปรับเปลี่ยนยา','เพิ่มโดสยา'].includes(r.v2_drug_type)).length;
+  const drugStop_v0  = data.filter(r=>r.v0_drug_type==='หยุดยา').length;
+  const drugCont_v0  = data.filter(r=>r.v0_drug_type==='รับยา').length;
+
+  // clinical averages
+  const hba1c = {
+    v0: avg(data.map(r=>sf(r.v0_hba1c,2,20)).filter(Boolean)),
+    v1: avg(data.map(r=>sf(r.v1_hba1c,2,20)).filter(Boolean)),
+    v2: avg(data.map(r=>sf(r.v2_hba1c,2,20)).filter(Boolean)),
+  };
+  const fbs = {
+    v0: avg(data.map(r=>sf(r.v0_fbs,30,800)).filter(Boolean)),
+    v1: avg(data.map(r=>sf(r.v1_fbs,30,800)).filter(Boolean)),
+    v2: avg(data.map(r=>sf(r.v2_fbs,30,800)).filter(Boolean)),
+  };
+  const bmi = {
+    v0: avg(data.map(r=>sf(r.v0_bmi,10,60)).filter(Boolean)),
+    v2: avg(data.map(r=>sf(r.v2_bmi,10,60)).filter(Boolean)),
+  };
+  const waist = {
+    v0: avg(data.map(r=>sf(r.v0_waist_cm,40,300)).filter(Boolean)),
+    v2: avg(data.map(r=>sf(r.v2_waist_cm,40,300)).filter(Boolean)),
+  };
+
+  // health literacy
+  const hl = {
+    v0: {ดีมาก:0,ดี:0,พอใช้:0},
+    v1: {ดีมาก:0,ดี:0,พอใช้:0},
+    v2: {ดีมาก:0,ดี:0,พอใช้:0},
+  };
+  data.forEach(r => {
+    ['v0','v1','v2'].forEach(v => {
+      const k = r[v+'_health_literacy']?.trim();
+      if (k && hl[v][k]!==undefined) hl[v][k]++;
+    });
+  });
+
+  // age
+  const ageGroups = {'<50':0,'50–59':0,'60–69':0,'≥70':0};
+  data.forEach(r => {
+    const a = sf(r.age, 10, 110);
+    if (!a) return;
+    if (a<50) ageGroups['<50']++;
+    else if (a<60) ageGroups['50–59']++;
+    else if (a<70) ageGroups['60–69']++;
+    else ageGroups['≥70']++;
+  });
+
+  // ── KPIs
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-remission').textContent = remissionCount;
+  document.getElementById('kpi-remission-pct').textContent = pct(remissionCount,total) + ' ของทั้งหมด';
+  document.getElementById('kpi-stopped').textContent = drugStop_v2;
+  document.getElementById('kpi-stopped-pct').textContent = pct(drugStop_v2,total) + ' ของผู้มีข้อมูล V2';
+  document.getElementById('kpi-continue').textContent = drugCont_v2;
+  document.getElementById('kpi-continue-pct').textContent = pct(drugCont_v2,total) + ' ของผู้มีข้อมูล V2';
+
+  // ── HbA1c line chart
+  makeChart('hba1cChart', {
+    type: 'line',
+    data: {
+      labels: ['Baseline (V0)', 'ครั้งที่ 1 (V1)', 'ครั้งที่ 2 (V2)'],
+      datasets: [{
+        label: 'HbA1c เฉลี่ย (%)',
+        data: [hba1c.v0, hba1c.v1, hba1c.v2],
+        borderColor: '#1253A4', backgroundColor: 'rgba(18,83,164,.08)',
+        fill: true, tension: .4, pointRadius: 6, pointBackgroundColor: '#1253A4',
+        pointBorderColor: '#fff', pointBorderWidth: 2,
+      }]
+    },
+    options: lineOpts('HbA1c (%)', 4.5, 9)
+  });
+
+  // ── FBS line chart
+  makeChart('fbsChart', {
+    type: 'line',
+    data: {
+      labels: ['Baseline (V0)', 'ครั้งที่ 1 (V1)', 'ครั้งที่ 2 (V2)'],
+      datasets: [{
+        label: 'FBS เฉลี่ย (mg/dL)',
+        data: [fbs.v0, fbs.v1, fbs.v2],
+        borderColor: '#0F7E62', backgroundColor: 'rgba(15,126,98,.08)',
+        fill: true, tension: .4, pointRadius: 6, pointBackgroundColor: '#0F7E62',
+        pointBorderColor: '#fff', pointBorderWidth: 2,
+      }]
+    },
+    options: lineOpts('FBS (mg/dL)')
+  });
+
+  // ── Metric grid
+  const metrics = [
+    { name:'HbA1c (%)', v0: hba1c.v0, v2: hba1c.v2, lo: false },
+    { name:'FBS (mg/dL)', v0: fbs.v0, v2: fbs.v2, lo: false },
+    { name:'BMI (kg/m²)', v0: bmi.v0, v2: bmi.v2, lo: false },
+    { name:'รอบเอว (ซม.)', v0: waist.v0, v2: waist.v2, lo: false },
+  ];
+  document.getElementById('metric-grid').innerHTML = metrics.map(m => {
+    const diff = m.v2 && m.v0 ? (m.v2 - m.v0).toFixed(1) : '—';
+    const improved = m.v2 < m.v0;
+    const arrow = !m.v2||!m.v0 ? '➡️' : improved ? '↓' : m.v2===m.v0 ? '→' : '↑';
+    const cls   = !m.v2||!m.v0 ? 'flat' : improved ? 'down' : 'up';
+    return `<div class="metric-item">
+      <div class="metric-name">${m.name}</div>
+      <div class="metric-row"><div class="metric-dot" style="background:#93b5e8"></div>
+        <div class="metric-val" style="color:#1253A4">V0: ${m.v0 || '—'}</div></div>
+      <div class="metric-arrow ${cls}">${arrow}</div>
+      <div class="metric-row"><div class="metric-dot" style="background:#6dcdb0"></div>
+        <div class="metric-val" style="color:#0F7E62">V2: ${m.v2 || '—'}</div></div>
+      <div style="font-size:10px;color:${improved?'#0F7E62':'#C0332F'};margin-top:4px;font-family:var(--mono)">
+        ${diff!=='—' ? (parseFloat(diff)>0?'+':'')+diff : '—'}
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── Remission donut
+  makeChart('remissionChart', {
+    type: 'doughnut',
+    data: {
+      labels: ['เข้าสู่ DM Remission', 'ไม่เข้า Remission', 'คำนวณไม่ได้'],
+      datasets: [{ data: [remissionCount, noRemission, cantCalc],
+        backgroundColor: ['#0F7E62','#C0332F','#B4B2A9'],
+        borderColor: '#fff', borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: { legend: { position:'bottom', labels: { font:{size:11}, padding:10 } } }
+    }
+  });
+
+  // ── Drug bar chart
+  makeChart('drugChart', {
+    type: 'bar',
+    data: {
+      labels: ['รับยา', 'หยุดยา', 'ลดยา', 'เพิ่ม/ปรับ'],
+      datasets: [
+        { label: 'V0', data: [drugCont_v0, drugStop_v0, 0, 0],
+          backgroundColor: 'rgba(18,83,164,.25)', borderRadius: 4 },
+        { label: 'V2', data: [drugCont_v2, drugStop_v2, drugRed_v2, drugAdd_v2],
+          backgroundColor: '#1253A4', borderRadius: 4 },
+      ]
+    },
+    options: barOpts()
+  });
+
+  // ── Age donut
+  makeChart('ageChart', {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(ageGroups),
+      datasets: [{ data: Object.values(ageGroups),
+        backgroundColor: ['#93c5fd','#3b82f6','#1d4ed8','#1e3a8a'],
+        borderColor: '#fff', borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '55%',
+      plugins: { legend: { position:'bottom', labels: { font:{size:11}, padding:10 } } }
+    }
+  });
+
+  // ── Health literacy stacked bar
+  makeChart('hlChart', {
+    type: 'bar',
+    data: {
+      labels: ['V0 (Baseline)', 'V1 (ครั้งที่ 1)', 'V2 (ครั้งที่ 2)'],
+      datasets: [
+        { label: 'ดีมาก', data: [hl.v0.ดีมาก, hl.v1.ดีมาก, hl.v2.ดีมาก], backgroundColor: '#0F7E62', borderRadius: 4 },
+        { label: 'ดี',    data: [hl.v0.ดี,    hl.v1.ดี,    hl.v2.ดี],    backgroundColor: '#6dcdb0', borderRadius: 0 },
+        { label: 'พอใช้', data: [hl.v0.พอใช้, hl.v1.พอใช้, hl.v2.พอใช้], backgroundColor: '#FAC775', borderRadius: 0 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { font:{size:11} } } },
+      scales: {
+        x: { stacked:true, grid:{display:false}, ticks:{font:{size:11}} },
+        y: { stacked:true, grid:{color:'rgba(0,0,0,.05)'}, ticks:{font:{size:11}} }
+      }
+    }
+  });
+
+  // ── HbA1c remission rate bars
+  const hba1cGroups = [
+    { label:'< 5.7 (ปกติ)',  lo:0,   hi:5.7,  color:'#0F7E62' },
+    { label:'5.7 – 6.5',     lo:5.7, hi:6.5,  color:'#6dcdb0' },
+    { label:'6.5 – 7.5',     lo:6.5, hi:7.5,  color:'#FAC775' },
+    { label:'> 7.5 (สูงมาก)',lo:7.5, hi:99,   color:'#C0332F' },
+  ];
+  let barsHtml = '';
+  hba1cGroups.forEach(g => {
+    const grp = data.filter(r => { const v=sf(r.v0_hba1c,2,20); return v && v>=g.lo && v<g.hi; });
+    const rem = grp.filter(r=>r.dm_remission_result?.includes('เข้าสู่')).length;
+    const rate = grp.length ? Math.round(rem/grp.length*100) : 0;
+    barsHtml += `<div class="bar-row">
+      <div class="bar-lbl">${g.label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${rate}%;background:${g.color}"></div></div>
+      <div class="bar-pct">${rate}%</div>
+    </div>`;
+  });
+  document.getElementById('hba1c-bars').innerHTML = barsHtml;
+
+  // ── Table (last 10)
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+  data.slice(-10).forEach((r, i) => {
+    const drugPill = pillClass(r.v2_drug_type);
+    const remPill  = r.dm_remission_result?.includes('เข้าสู่') ? 'pill-green'
+                   : r.dm_remission_result?.includes('ไม่เข้า') ? 'pill-red' : 'pill-gray';
+    const remLabel = r.dm_remission_result?.includes('เข้าสู่') ? 'เข้าสู่ Remission'
+                   : r.dm_remission_result?.includes('ไม่เข้า') ? 'ไม่เข้า' : 'คำนวณไม่ได้';
+    tbody.innerHTML += `<tr>
+      <td style="font-family:var(--mono);color:var(--text2)">${data.length - 9 + i}</td>
+      <td>${r.gender||'—'}</td>
+      <td style="font-family:var(--mono)">${r.age||'—'}</td>
+      <td style="font-family:var(--mono)">${r.v0_hba1c||'—'}</td>
+      <td style="font-family:var(--mono)">${r.v2_hba1c||'—'}</td>
+      <td style="font-family:var(--mono)">${r.v0_fbs||'—'}</td>
+      <td style="font-family:var(--mono)">${r.v2_fbs||'—'}</td>
+      <td><span class="pill ${drugPill}">${r.v2_drug_type||'—'}</span></td>
+      <td><span class="pill ${remPill}">${remLabel}</span></td>
+    </tr>`;
+  });
+
+  // ── Alert note
+  const noV2 = data.filter(r=>!r.v2_date||r.v2_date.trim()==='').length;
+  if (noV2 > 0) {
+    document.getElementById('alert-note').style.display = 'flex';
+    document.getElementById('alert-text').textContent =
+      `มีผู้ป่วย ${noV2} ราย ที่ยังไม่มีข้อมูลการประเมินครั้งที่ 2 (V2) — กราฟบางส่วนคำนวณจากผู้ที่มีข้อมูลครบเท่านั้น`;
+  }
+}
+
+// ── CHART OPTION HELPERS ─────────────────────────────────────────────────
+function lineOpts(yLabel, yMin, yMax) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        min: yMin, max: yMax,
+        grid: { color: 'rgba(0,0,0,.05)' },
+        ticks: { font:{size:11}, callback: v=>v }
+      },
+      x: { grid: { display:false }, ticks: { font:{size:11} } }
+    }
+  };
+}
+function barOpts() {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font:{size:11} } } },
+    scales: {
+      y: { grid:{color:'rgba(0,0,0,.05)'}, ticks:{font:{size:11}} },
+      x: { grid:{display:false}, ticks:{font:{size:11}} }
+    }
+  };
+}
+function pillClass(val) {
+  if (!val) return 'pill-gray';
+  if (val==='หยุดยา') return 'pill-green';
+  if (val==='รับยา')  return 'pill-blue';
+  if (val.includes('ลด'))  return 'pill-amber';
+  if (val.includes('เพิ่ม')) return 'pill-red';
+  return 'pill-gray';
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
