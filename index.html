@@ -167,6 +167,30 @@
   }
   .alert-icon { font-size: 16px; flex-shrink: 0; }
 
+  /* ── FILTER BAR ── */
+  .filter-bar {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 10px 32px; display: flex; align-items: center; gap: 14px;
+    flex-wrap: wrap; position: sticky; top: 60px; z-index: 90;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  }
+  .filter-label { font-size: 12px; color: var(--text2); font-weight: 600; letter-spacing:.04em; white-space:nowrap; }
+  .year-btn {
+    padding: 5px 16px; border-radius: 20px; border: 1.5px solid var(--border);
+    background: transparent; font-size: 12px; font-family: var(--mono);
+    color: var(--text2); cursor: pointer; transition: all .18s; white-space:nowrap;
+  }
+  .year-btn:hover { border-color: var(--teal); color: var(--teal); }
+  .year-btn.active {
+    background: var(--teal); border-color: var(--teal);
+    color: #fff; font-weight: 600;
+  }
+  .filter-count {
+    margin-left: auto; font-size: 11px; color: var(--text2);
+    font-family: var(--mono); background: var(--gray-lt);
+    padding: 4px 12px; border-radius: 20px;
+  }
+
   /* ── FOOTER ── */
   footer {
     text-align: center; padding: 20px; font-size: 11px; color: var(--text2);
@@ -214,7 +238,12 @@
   </div>
 </header>
 
-<main class="main">
+<!-- FILTER BAR -->
+<div class="filter-bar" id="filter-bar" style="display:none">
+  <span class="filter-label">🗓 กรองตามปี:</span>
+  <div id="year-buttons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  <span class="filter-count" id="filter-count"></span>
+</div>
   <div id="error-area"></div>
   <div id="dashboard" style="display:none">
 
@@ -332,6 +361,8 @@ const SHEET_GID = "985697561";
 const GVIZ_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
 let charts = {};
+let allData = [];
+let selectedYear = 'ทั้งหมด';
 
 // ── HELPERS ─────────────────────────────────────────────────────────────
 function sf(v, lo=0, hi=9999) {
@@ -391,10 +422,13 @@ async function loadData() {
 
   try {
     const data = await fetchGViz();
-    renderDashboard(data);
+    allData = data;
+    buildYearFilter(data);
+    applyFilter();
     document.getElementById('last-updated').textContent = 'อัปเดต ' + new Date().toLocaleTimeString('th-TH');
     document.getElementById('footer-time').textContent = 'โหลดล่าสุด ' + new Date().toLocaleString('th-TH');
     document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('filter-bar').style.display = 'flex';
   } catch(e) {
     document.getElementById('error-area').innerHTML = `
       <div class="error-box" style="margin-bottom:16px">
@@ -412,6 +446,74 @@ async function loadData() {
   } finally {
     document.getElementById('loader').style.display = 'none';
   }
+}
+
+// ── YEAR FILTER ──────────────────────────────────────────────────────────
+function buildYearFilter(data) {
+  // ดึงปีที่มีในข้อมูล (คอลัมน์ year หรือ parse จาก v0_date)
+  const yearSet = new Set();
+  data.forEach(r => {
+    let y = r.year?.trim();
+    if (!y || y === '') {
+      // fallback: parse จาก v0_date เช่น "08/12/2025" หรือ "01/11/2024"
+      const parts = (r.v0_date || '').split('/');
+      if (parts.length === 3) y = parts[2];
+    }
+    if (y && y.length >= 4) yearSet.add(y);
+  });
+
+  const years = Array.from(yearSet).sort();
+  const container = document.getElementById('year-buttons');
+  container.innerHTML = '';
+
+  // ปุ่ม "ทั้งหมด"
+  const allBtn = document.createElement('button');
+  allBtn.className = 'year-btn' + (selectedYear === 'ทั้งหมด' ? ' active' : '');
+  allBtn.textContent = 'ทั้งหมด';
+  allBtn.onclick = () => { selectedYear = 'ทั้งหมด'; refreshFilter(); };
+  container.appendChild(allBtn);
+
+  years.forEach(y => {
+    const btn = document.createElement('button');
+    // แสดงปี พ.ศ. ถ้าเป็นตัวเลข 4 หลักที่ > 2500 แสดงเป็น พ.ศ. ด้วย
+    const displayY = parseInt(y) > 2400 ? `${y} (พ.ศ.)` : y;
+    btn.className = 'year-btn' + (selectedYear === y ? ' active' : '');
+    btn.textContent = displayY;
+    btn.onclick = () => { selectedYear = y; refreshFilter(); };
+    container.appendChild(btn);
+  });
+}
+
+function getYear(r) {
+  let y = r.year?.trim();
+  if (!y || y === '') {
+    const parts = (r.v0_date || '').split('/');
+    if (parts.length === 3) y = parts[2];
+  }
+  return y || '';
+}
+
+function refreshFilter() {
+  // อัปเดตสถานะปุ่ม
+  document.querySelectorAll('.year-btn').forEach(btn => {
+    const label = btn.textContent.split(' ')[0]; // ตัด "(พ.ศ.)" ออก
+    btn.classList.toggle('active',
+      (selectedYear === 'ทั้งหมด' && btn.textContent === 'ทั้งหมด') ||
+      (selectedYear !== 'ทั้งหมด' && label === selectedYear)
+    );
+  });
+  applyFilter();
+}
+
+function applyFilter() {
+  const filtered = selectedYear === 'ทั้งหมด'
+    ? allData
+    : allData.filter(r => getYear(r) === selectedYear);
+
+  const countEl = document.getElementById('filter-count');
+  countEl.textContent = `แสดง ${filtered.length} จาก ${allData.length} ราย`;
+
+  renderDashboard(filtered);
 }
 
 // ── RENDER ───────────────────────────────────────────────────────────────
